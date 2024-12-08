@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
@@ -6,11 +7,14 @@ use std::io::BufRead;
 use std::path::Path;
 
 fn main() {
-    let pairs = parse("input.txt").unwrap();
+    let (left, right) = parse_lists("input.txt").unwrap();
 
+    let pairs = get_pairs(&left, &right).unwrap();
     let total_distance: i32 = pairs.iter().map(|p| p.distance()).sum();
-
     println!("Part 1 Answer: {}", total_distance);
+
+    let similarity_score = compute_score(&left, &right);
+    println!("Part 2 Answer: {}", similarity_score);
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -36,7 +40,7 @@ struct Pair {
     right: i32,
 }
 
-fn parse(filename: &str) -> Result<Vec<Pair>, Box<dyn std::error::Error>> {
+fn parse_lists(filename: &str) -> Result<(Vec<i32>, Vec<i32>), Box<dyn Error>> {
     let path = Path::new(filename);
     let file = File::open(path)?;
     let reader = io::BufReader::new(file);
@@ -54,14 +58,24 @@ fn parse(filename: &str) -> Result<Vec<Pair>, Box<dyn std::error::Error>> {
 
         left.push(split[0].parse::<i32>()?);
         right.push(split[1].parse::<i32>()?);
-
-        left.sort();
-        right.sort();
     }
 
     if left.len() != right.len() {
         return Err(Box::new(Err::MalformedInput));
     }
+
+    Ok((left, right))
+}
+
+fn get_pairs(left: &Vec<i32>, right: &Vec<i32>) -> Result<Vec<Pair>, Err> {
+    if left.len() != right.len() {
+        return Err(Err::MalformedInput);
+    }
+
+    let mut l = left.clone();
+    l.sort();
+    let mut r = right.clone();
+    r.sort();
 
     let mut pairs = Vec::new();
 
@@ -81,9 +95,31 @@ impl Pair {
     }
 }
 
+fn compute_score(left: &[i32], right: &[i32]) -> i32 {
+    let mut m = HashMap::new();
+    for i in right.iter() {
+        match m.contains_key(i) {
+            true => {
+                m.insert(i, m.get(i).unwrap() + 1);
+            }
+            false => {
+                m.insert(i, 1);
+            }
+        }
+    }
+
+    let mut score = 0;
+    for i in left.iter() {
+        score += i * m.get(i).unwrap_or(&0);
+    }
+
+    score
+}
+
 #[test]
-fn test() {
-    let pairs = parse("test-input.txt").unwrap();
+fn test_part1() {
+    let (left, right) = parse_lists("test-input.txt").unwrap();
+    let pairs = get_pairs(&left, &right).unwrap();
 
     let expected_pairs = vec![
         Pair { left: 1, right: 3 },
@@ -106,4 +142,14 @@ fn test() {
     let total_distance: i32 = pairs.iter().map(|p| p.distance()).sum();
 
     assert_eq!(total_distance, expected_total_distance);
+}
+
+#[test]
+fn test_part2() {
+    let (left, right) = parse_lists("test-input.txt").unwrap();
+
+    let score = compute_score(&left, &right);
+    let expected_score = 31;
+
+    assert_eq!(score, expected_score);
 }
