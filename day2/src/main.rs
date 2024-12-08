@@ -5,11 +5,17 @@ use std::path::Path;
 
 fn main() {
     let reports = parse("input.txt").unwrap();
-    let safeties: Vec<bool> = reports.iter().map(is_safe).collect();
+    let safeties: Vec<bool> = reports.iter().map(|r| is_safe(r, None, false)).collect();
     let safe_count = safeties
         .iter()
         .fold(0, |acc, safe| if *safe { acc + 1 } else { acc });
     println!("Part 1: {}", safe_count);
+
+    let safeties: Vec<bool> = reports.iter().map(|r| is_safe(r, None, true)).collect();
+    let safe_count = safeties
+        .iter()
+        .fold(0, |acc, safe| if *safe { acc + 1 } else { acc });
+    println!("Part 2: {}", safe_count);
 }
 
 fn parse(filename: &str) -> Result<Vec<Vec<i32>>, Box<dyn std::error::Error>> {
@@ -30,47 +36,87 @@ fn parse(filename: &str) -> Result<Vec<Vec<i32>>, Box<dyn std::error::Error>> {
     Ok(reports)
 }
 
-fn is_safe(report: &Vec<i32>) -> bool {
+fn is_safe(
+    report: &Vec<i32>,
+    current_removed_index: Option<usize>,
+    problem_dampener: bool,
+) -> bool {
     #[derive(Debug, Eq, PartialEq)]
     enum Direction {
         Increasing,
         Decreasing,
     }
 
+    let r: &Vec<i32>;
+    let mut r2: Vec<i32>;
+    if problem_dampener && current_removed_index.is_some() {
+        let i = current_removed_index.unwrap();
+        if i == report.len() {
+            return false;
+        }
+        r2 = report.clone();
+        r2.remove(i);
+        r = &r2
+    } else {
+        r = report;
+    }
+
+    let mut safe = true;
     let mut current_direction: Option<Direction> = None;
-    for (i, v) in report.iter().enumerate() {
+    for (i, _v) in r.iter().enumerate() {
         if i == 0 {
             continue;
         }
-        let diff = report[i - 1] - report[i];
+        let diff = r[i - 1] - r[i];
         let distance = diff.abs();
         if distance == 0 || distance > 3 {
-            return false;
+            safe = false;
+            if !problem_dampener {
+                return safe;
+            } else {
+                break;
+            }
         }
 
-        match &current_direction {
-            None => {
-                if diff.is_positive() {
-                    current_direction = Option::from(Direction::Increasing);
-                } else {
-                    current_direction = Option::from(Direction::Decreasing);
+        if safe {
+            match &current_direction {
+                None => {
+                    if diff.is_positive() {
+                        current_direction = Option::from(Direction::Increasing);
+                    } else {
+                        current_direction = Option::from(Direction::Decreasing);
+                    }
                 }
-            }
-            Some(direction) => {
-                if diff.is_positive() && *direction != Direction::Increasing
-                    || diff.is_negative() && *direction != Direction::Decreasing
-                {
-                    return false;
+                Some(direction) => {
+                    if diff.is_positive() && *direction != Direction::Increasing
+                        || diff.is_negative() && *direction != Direction::Decreasing
+                    {
+                        safe = false;
+                        if !problem_dampener {
+                            return safe;
+                        } else {
+                            break;
+                        }
+                    }
                 }
             }
         }
     }
 
-    true
+    if problem_dampener && !safe {
+        let i = if let Some(index) = current_removed_index {
+            index as isize
+        } else {
+            -1
+        };
+        return is_safe(report, Some((i + 1) as usize), true);
+    }
+
+    safe
 }
 
 #[test]
-fn test() {
+fn test_day2() {
     let expected_reports = vec![
         vec![7, 6, 4, 2, 1],
         vec![1, 2, 7, 8, 9],
@@ -83,7 +129,11 @@ fn test() {
     assert_eq!(expected_reports, reports);
 
     let expected_safeties = vec![true, false, false, false, false, true];
-    let safeties: Vec<bool> = reports.iter().map(is_safe).collect();
+    let safeties: Vec<bool> = reports.iter().map(|r| is_safe(r, None, false)).collect();
+    assert_eq!(expected_safeties, safeties);
 
+    // part 2
+    let expected_safeties = vec![true, false, false, true, true, true];
+    let safeties: Vec<bool> = reports.iter().map(|r| is_safe(r, None, true)).collect();
     assert_eq!(expected_safeties, safeties);
 }
